@@ -77,23 +77,6 @@ canvas {
 
 #hint { margin-top: 0.75rem; font-size: 0.75rem; color: #555; letter-spacing: 0.05em; }
 
-#ranking { width: 100%; max-width: 240px; }
-#ranking h3 {
-  text-align: center; color: #444; letter-spacing: 0.15em;
-  font-size: 0.65rem; margin-bottom: 0.4rem;
-}
-#ranking ol { list-style: none; padding: 0; display: flex; flex-direction: column; gap: 3px; }
-#ranking li {
-  display: flex; justify-content: space-between; align-items: center;
-  padding: 0.2rem 0.6rem; border-radius: 3px; background: #1a1a1a;
-  font-size: 0.75rem; color: #666;
-}
-#ranking li.new { background: #0d2818; color: #4ade80; }
-#ranking li .pos { color: #444; margin-right: 0.4rem; font-size: 0.65rem; }
-#ranking li .pts { color: #fff; font-weight: bold; }
-#ranking li.new .pts { color: #4ade80; }
-#ranking li .meta { font-size: 0.65rem; }
-
 #speed-selector { display: flex; flex-direction: column; align-items: center; gap: 0.4rem; }
 #speed-selector label { font-size: 0.75rem; color: #666; letter-spacing: 0.12em; }
 #speed-btns { display: flex; gap: 0.3rem; }

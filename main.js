@@ -18,53 +18,11 @@ const gpStatus     = document.getElementById('gamepad-status');
 canvas.width  = COLS * CELL;
 canvas.height = ROWS * CELL;
 
-// ── Local ranking (localStorage) ─────────────────────────────────────────────
-const LS_KEY = 'snake_top5';
-
-function loadRanking() {
-  try { return JSON.parse(localStorage.getItem(LS_KEY)) ?? []; }
-  catch { return []; }
-}
-
-function saveToRanking(score, length) {
-  if (score === 0) return loadRanking();
-  const entries = loadRanking();
-  entries.push({ score, length, date: new Date().toLocaleDateString('pt-BR') });
-  entries.sort((a, b) => b.score - a.score);
-  const top5 = entries.slice(0, 5);
-  localStorage.setItem(LS_KEY, JSON.stringify(top5));
-  return top5;
-}
-
-function renderRanking(entries, highlightScore = null) {
-  const el = document.getElementById('ranking');
-  if (!entries.length) { el.innerHTML = ''; return; }
-  const medals = ['🥇', '🥈', '🥉'];
-  let marked = false;
-  const items = entries.map((e, i) => {
-    const isNew = !marked && highlightScore !== null && e.score === highlightScore;
-    if (isNew) marked = true;
-    const pos = medals[i] ?? `${i + 1}.`;
-    return `<li${isNew ? ' class="new"' : ''}>
-      <span><span class="pos">${pos}</span><span class="pts">${e.score}</span></span>
-      <span class="meta">${e.length} cells · ${e.date}</span>
-    </li>`;
-  }).join('');
-  el.innerHTML = `<h3>TOP 5</h3><ol>${items}</ol>`;
-}
-
 // ── Worker ────────────────────────────────────────────────────────────────────
 const worker = new Worker('./worker.js');
 
 const offscreen = canvas.transferControlToOffscreen();
 worker.postMessage({ type: 'init', canvas: offscreen }, [offscreen]);
-
-// Restore best score and ranking from previous sessions
-const savedRanking = loadRanking();
-if (savedRanking.length) {
-  bestEl.textContent = savedRanking[0].score;
-  renderRanking(savedRanking);
-}
 
 // ── Worker → main thread messages ────────────────────────────────────────────
 worker.onmessage = ({ data }) => {
@@ -86,9 +44,6 @@ worker.onmessage = ({ data }) => {
       overlayTitle.style.color = '#f87171';
       overlayMsg.textContent   = `Score: ${data.score}  —  Snake length: ${data.length}`;
     }
-    const top5 = saveToRanking(data.score, data.length);
-    renderRanking(top5, data.score);
-    bestEl.textContent    = top5[0]?.score ?? 0;
     startBtn.textContent  = 'PLAY AGAIN';
     overlay.style.display = 'flex';
     rafActive = false;
