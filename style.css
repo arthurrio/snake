@@ -80,8 +80,8 @@ canvas {
 #speed-selector label { font-size: 0.75rem; color: #666; letter-spacing: 0.12em; }
 #speed-btns { display: flex; gap: 0.3rem; }
 #speed-btns button {
-  margin: 0; padding: 0.3rem 0.5rem;
-  min-width: 2rem;
+  margin: 0; padding: 0.3rem 0;
+  width: 2rem;
   background: #1a1a1a; color: #555;
   border: 1px solid #333; border-radius: 3px;
   font-family: inherit; font-size: 0.8rem; font-weight: bold;
@@ -142,7 +142,7 @@ canvas { touch-action: none; width: 100%; height: 100%; }
   #hud { gap: 0.6rem; font-size: 0.72rem; letter-spacing: 0; margin-bottom: 0.4rem; }
   #overlay { gap: 0.6rem; }
   #speed-btns { flex-wrap: wrap; justify-content: center; max-width: 190px; }
-  #speed-btns button { min-width: 1.8rem; padding: 0.3rem 0.4rem; font-size: 0.75rem; }
+  #speed-btns button { width: 1.8rem; padding: 0.3rem 0; font-size: 0.75rem; }
   #overlay button { margin-top: 0; padding: 0.6rem 2rem; font-size: 1rem; }
   #hint { margin-top: 0.2rem; }
 }
