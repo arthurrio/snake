@@ -47,6 +47,7 @@ worker.onmessage = ({ data }) => {
     startBtn.textContent  = 'PLAY AGAIN';
     overlay.style.display = 'flex';
     rafActive = false;
+    startBtn.focus();
   }
 };
 
@@ -104,8 +105,12 @@ document.getElementById('speed-btns').addEventListener('click', e => {
   const btn = e.target.closest('[data-level]');
   if (!btn) return;
   selectedLevel = Number(btn.dataset.level);
-  document.querySelectorAll('#speed-btns button').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('#speed-btns button').forEach(b => {
+    b.classList.remove('active');
+    b.setAttribute('aria-pressed', 'false');
+  });
   btn.classList.add('active');
+  btn.setAttribute('aria-pressed', 'true');
 });
 
 // Prevent page scroll on mobile without breaking tap/click events

@@ -74,15 +74,22 @@ canvas {
 
 #overlay button:hover { background: #86efac; }
 
-#hint { margin-top: 0.75rem; font-size: 0.75rem; color: #555; letter-spacing: 0.05em; }
+#hint { margin-top: 0.75rem; font-size: 0.75rem; color: #999; letter-spacing: 0.05em; }
+
+/* ── Focus visible ──────────────────────────────────────────────────────── */
+:focus-visible {
+  outline: 2px solid #4ade80;
+  outline-offset: 3px;
+  border-radius: 3px;
+}
 
 #speed-selector { display: flex; flex-direction: column; align-items: center; gap: 0.4rem; }
-#speed-selector label { font-size: 0.75rem; color: #666; letter-spacing: 0.12em; }
+#speed-label { font-size: 0.75rem; color: #999; letter-spacing: 0.12em; }
 #speed-btns { display: flex; gap: 0.3rem; }
 #speed-btns button {
   margin: 0; padding: 0.3rem 0;
   width: 2rem; text-align: center;
-  background: #1a1a1a; color: #555;
+  background: #1a1a1a; color: #999;
   border: 1px solid #333; border-radius: 3px;
   font-family: inherit; font-size: 0.8rem; font-weight: bold;
   cursor: pointer; transition: background 0.1s, color 0.1s, border-color 0.1s;
@@ -95,7 +102,7 @@ canvas {
   bottom: 1rem;
   right: 1rem;
   font-size: 0.7rem;
-  color: #333;
+  color: #666;
   letter-spacing: 0.05em;
   transition: color 0.3s;
 }

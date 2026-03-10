@@ -8,44 +8,44 @@
 </head>
 <body>
   <h1>Snake</h1>
-  <div id="hud">
-    <div>SCORE: <span id="score">0</span></div>
+  <div id="hud" aria-label="Game stats">
+    <div>SCORE: <span id="score" aria-live="polite" aria-atomic="true">0</span></div>
     <div>BEST: <span id="best">0</span></div>
     <div>CELLS: <span id="cells">0</span></div>
-    <div>COMBO: <span id="combo">x1</span></div>
+    <div>COMBO: <span id="combo" aria-live="polite" aria-atomic="true">x1</span></div>
   </div>
 
   <div id="canvas-wrapper">
-    <canvas id="canvas"></canvas>
+    <canvas id="canvas" aria-label="Snake game board"></canvas>
 
-    <div id="overlay">
+    <div id="overlay" role="dialog" aria-modal="true" aria-labelledby="overlay-title">
       <h2 id="overlay-title" style="color:#4ade80">SNAKE</h2>
       <p id="overlay-msg">Fill the entire grid to win.</p>
-      <div id="speed-selector">
-        <label>SPEED</label>
+      <div id="speed-selector" role="group" aria-labelledby="speed-label">
+        <span id="speed-label">SPEED</span>
         <div id="speed-btns">
-          <button data-level="1">1</button>
-          <button data-level="2">2</button>
-          <button data-level="3">3</button>
-          <button data-level="4">4</button>
-          <button data-level="5" class="active">5</button>
-          <button data-level="6">6</button>
-          <button data-level="7">7</button>
-          <button data-level="8">8</button>
-          <button data-level="9">9</button>
-          <button data-level="10">10</button>
+          <button data-level="1"  aria-pressed="false" aria-label="Speed 1">1</button>
+          <button data-level="2"  aria-pressed="false" aria-label="Speed 2">2</button>
+          <button data-level="3"  aria-pressed="false" aria-label="Speed 3">3</button>
+          <button data-level="4"  aria-pressed="false" aria-label="Speed 4">4</button>
+          <button data-level="5"  aria-pressed="true"  aria-label="Speed 5" class="active">5</button>
+          <button data-level="6"  aria-pressed="false" aria-label="Speed 6">6</button>
+          <button data-level="7"  aria-pressed="false" aria-label="Speed 7">7</button>
+          <button data-level="8"  aria-pressed="false" aria-label="Speed 8">8</button>
+          <button data-level="9"  aria-pressed="false" aria-label="Speed 9">9</button>
+          <button data-level="10" aria-pressed="false" aria-label="Speed 10">10</button>
         </div>
       </div>
-<button id="start-btn">START</button>
+      <button id="start-btn">START</button>
       <p id="hint">Arrow keys · WASD · Swipe · Gamepad</p>
     </div>
   </div>
 
-  <div id="dpad">
-    <button id="dpad-up">▲</button>
-    <button id="dpad-left">◀</button>
-    <button id="dpad-right">▶</button>
-    <button id="dpad-down">▼</button>
+  <div id="dpad" role="group" aria-label="Directional controls">
+    <button id="dpad-up"    aria-label="Move up">▲</button>
+    <button id="dpad-left"  aria-label="Move left">◀</button>
+    <button id="dpad-right" aria-label="Move right">▶</button>
+    <button id="dpad-down"  aria-label="Move down">▼</button>
   </div>
 
   <div id="gamepad-status">NO GAMEPAD</div>
