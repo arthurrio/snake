@@ -29,6 +29,7 @@ self.onmessage = ({ data }) => {
     case 'init':
       canvas = data.canvas;
       ctx    = canvas.getContext('2d');
+      buildGridCache();
       drawEmpty();
       break;
     case 'start':
@@ -103,11 +104,10 @@ function initGame() {
 
 // ── Apple ────────────────────────────────────────────────────────────────────
 function spawnApple() {
-  const occ  = new Set(snake.map(s => s.y * COLS + s.x));
-  const free = [];
-  for (let i = 0; i < TOTAL; i++) if (!occ.has(i)) free.push(i);
-  if (!free.length) { apple = null; return; }
-  const idx = free[(Math.random() * free.length) | 0];
+  if (snake.length >= TOTAL) { apple = null; return; }
+  const occ = new Set(snake.map(s => s.y * COLS + s.x));
+  let idx;
+  do { idx = (Math.random() * TOTAL) | 0; } while (occ.has(idx));
   apple = { x: idx % COLS, y: (idx / COLS) | 0 };
 }
 
@@ -268,15 +268,23 @@ function drawEmpty() {
   drawGrid();
 }
 
-function drawGrid() {
-  ctx.strokeStyle = '#1a1a1a';
-  ctx.lineWidth   = 0.5;
+let gridCache = null;
+
+function buildGridCache() {
+  gridCache = new OffscreenCanvas(COLS * CELL, ROWS * CELL);
+  const gCtx = gridCache.getContext('2d');
+  gCtx.strokeStyle = '#1a1a1a';
+  gCtx.lineWidth   = 0.5;
   for (let x = 0; x <= COLS; x++) {
-    ctx.beginPath(); ctx.moveTo(x * CELL, 0); ctx.lineTo(x * CELL, canvas.height); ctx.stroke();
+    gCtx.beginPath(); gCtx.moveTo(x * CELL, 0); gCtx.lineTo(x * CELL, ROWS * CELL); gCtx.stroke();
   }
   for (let y = 0; y <= ROWS; y++) {
-    ctx.beginPath(); ctx.moveTo(0, y * CELL); ctx.lineTo(canvas.width, y * CELL); ctx.stroke();
+    gCtx.beginPath(); gCtx.moveTo(0, y * CELL); gCtx.lineTo(COLS * CELL, y * CELL); gCtx.stroke();
   }
+}
+
+function drawGrid() {
+  ctx.drawImage(gridCache, 0, 0);
 }
 
 function drawApple() {
