@@ -1,0 +1,18 @@
+{
+  "name": "snake",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "playwright test",
+    "test:all": "vitest run && playwright test",
+    "test:coverage": "vitest run --coverage"
+  },
+  "devDependencies": {
+    "vitest": "^2.1.0",
+    "@playwright/test": "^1.48.0",
+    "@vitest/coverage-v8": "^2.1.0",
+    "serve": "^14.2.0"
+  }
+}
