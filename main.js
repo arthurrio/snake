@@ -108,6 +108,9 @@ document.getElementById('speed-btns').addEventListener('click', e => {
   btn.classList.add('active');
 });
 
+// Prevent page scroll on mobile without breaking tap/click events
+document.addEventListener('touchmove', e => e.preventDefault(), { passive: false });
+
 // ── Touch / swipe input ───────────────────────────────────────────────────────
 let touchStartX = 0, touchStartY = 0;
 
