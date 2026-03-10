@@ -1,68 +1,66 @@
 # Snake
 
-Um jogo Snake moderno rodando no browser, com renderização suave, efeitos visuais, suporte a mobile e ranking local.
+A modern Snake game running in the browser, with smooth rendering, visual effects, mobile support, and responsive layout.
 
-**[Jogar agora →](https://arthurrio.github.io/snake/)**
-
----
-
-## Funcionalidades
-
-- Movimento interpolado com easing (smoothstep) para animação fluida
-- Partículas e textos flutuantes ao comer a maçã
-- Sistema de combo: coma maçãs rapidamente para multiplicar os pontos
-- Flash de morte animado ao colidir
-- Seletor de velocidade (10 níveis)
-- Ranking Top 5 persistido no `localStorage`
-- Controles por teclado, swipe, D-pad na tela e gamepad
-- Layout responsivo para mobile e desktop
+**[Play now →](https://arthurrio.github.io/snake/)**
 
 ---
 
-## Estrutura do projeto
+## Features
+
+- Interpolated movement with smoothstep easing for fluid animation
+- Particle explosions and floating score texts when eating an apple
+- Combo system: eat apples quickly to multiply your points
+- Animated death flash on collision
+- Speed selector (10 levels)
+- Responsive layout for mobile and desktop
+- Controls via keyboard, swipe, on-screen D-pad, and gamepad
+
+---
+
+## Project structure
 
 ```
 snake/
-├── index.html   # Estrutura HTML da página
-├── style.css    # Estilos e layout responsivo
-├── main.js      # Thread principal: input, HUD, ranking
-└── worker.js    # Web Worker: lógica do jogo e renderização
+├── index.html   # HTML structure
+├── style.css    # Styles and responsive layout
+├── main.js      # Main thread: input, HUD
+└── worker.js    # Web Worker: game logic and rendering
 ```
 
 ---
 
-## Como funciona
+## How it works
 
-### Arquitetura de threads
+### Thread architecture
 
-O jogo usa duas threads separadas para garantir performance máxima:
+The game uses two separate threads to maximize performance:
 
 ```
-Thread principal (main.js)          Web Worker (worker.js)
+Main thread (main.js)               Web Worker (worker.js)
 ─────────────────────────           ──────────────────────
-Captura input (teclado,             Lógica do jogo (tick)
-  swipe, D-pad, gamepad)    ──→     Renderização no canvas
-Atualiza o HUD              ←──     Envia mensagens: hud, end
-Controla o ranking
+Captures input (keyboard,           Game logic (tick)
+  swipe, D-pad, gamepad)    ──→     Canvas rendering
+Updates the HUD             ←──     Sends messages: hud, end
 ```
 
-A cada frame do `requestAnimationFrame`, a thread principal envia o timestamp e a direção atual para o Worker. O Worker decide quando executar um tick do jogo com base no acumulador de tempo.
+On every `requestAnimationFrame`, the main thread sends the current timestamp and direction to the Worker. The Worker uses a time accumulator to decide when to fire a game tick.
 
 ### Web Worker + OffscreenCanvas
 
-O canvas é transferido para o Worker via `transferControlToOffscreen()`, permitindo que toda a renderização ocorra fora da thread principal. Isso garante que o jogo continue rodando sem travar mesmo se a thread principal estiver ocupada.
+The canvas is transferred to the Worker via `transferControlToOffscreen()`, so all rendering happens off the main thread. This ensures the game keeps running smoothly even if the main thread is busy.
 
 ```js
 const offscreen = canvas.transferControlToOffscreen();
 worker.postMessage({ type: 'init', canvas: offscreen }, [offscreen]);
 ```
 
-### Loop de jogo
+### Game loop
 
-O jogo separa **lógica** de **renderização**:
+The game separates **logic** from **rendering**:
 
-- **Lógica (tick):** roda em intervalos fixos configuráveis (ex: 120ms no nível 5). Um acumulador de tempo garante que ticks atrasados sejam recuperados sem pular frames.
-- **Renderização (rAF):** roda a ~60fps. Entre dois ticks, as posições da cobra são interpoladas com easing smoothstep (`3t² - 2t³`), dando movimento orgânico ao invés de robótico.
+- **Logic (tick):** runs at a fixed configurable interval (e.g. 120ms at level 5). A time accumulator catches up missed ticks without skipping frames.
+- **Rendering (rAF):** runs at ~60fps. Between two ticks, each segment's position is interpolated using smoothstep easing (`3t² - 2t³`), making movement feel organic rather than robotic.
 
 ```
 Tick 0          Tick 1          Tick 2
@@ -71,63 +69,49 @@ Tick 0          Tick 1          Tick 2
        t=0.3  t=0.6  t=0.9
 ```
 
-### Interpolação de movimento
+### Movement interpolation
 
-A cada frame de renderização, `t ∈ [0, 1)` representa o progresso entre o tick anterior e o próximo. A posição visual de cada segmento é calculada interpolando entre `prevSnake` e `snake` com smoothstep:
+On each render frame, `t ∈ [0, 1)` represents the progress between the previous and next tick. Each segment's visual position is computed by interpolating between `prevSnake` and `snake` with smoothstep:
 
 ```js
 const s = t * t * (3 - 2 * t); // smoothstep
 const rx = (prev.x + (seg.x - prev.x) * s) * CELL + pad;
 ```
 
-A cauda "fantasma" (último segmento do tick anterior) também é desenhada com opacidade decrescente para um efeito de deslizamento natural.
+A "ghost tail" (the last segment from the previous tick) is also drawn with decreasing opacity, creating a natural gliding effect.
 
-### Sistema de combo
+### Combo system
 
-Comer maçãs com menos de 3 segundos de intervalo entre elas encadeia um combo. O multiplicador cresce a cada maçã consecutiva, aumentando os pontos e o tamanho do texto flutuante.
+Eating apples within 3 seconds of each other chains a combo. The multiplier grows with each consecutive apple, increasing points and the size of the floating text.
 
 ```
-1ª maçã: +1 ponto
-2ª maçã (< 3s): +2 pontos  (x2)
-3ª maçã (< 3s): +3 pontos  (x3)
+1st apple: +1 point
+2nd apple (< 3s): +2 points  (x2)
+3rd apple (< 3s): +3 points  (x3)
 ...
 ```
 
-### Efeitos visuais
+### Visual effects
 
-**Partículas:** ao comer uma maçã, 14 partículas são emitidas em ângulos distribuídos uniformemente com velocidade aleatória. Cada partícula tem gravidade, decaimento de vida e desaparece gradualmente.
+**Particles:** eating an apple emits 14 particles at evenly distributed angles with random speeds. Each particle has gravity, a life decay, and fades out gradually.
 
-**Textos flutuantes:** o score ganho aparece na posição da maçã e sobe suavemente até desaparecer.
+**Floating texts:** the points earned appear at the apple's position and float upward until they vanish.
 
-**Flash de morte:** ao colidir, a cobra pisca entre vermelho e vermelho escuro usando uma onda senoidal por 700ms antes de exibir o game over.
+**Death flash:** on collision, the snake flashes between red and dark red using a sine wave for 700ms before showing the game over screen.
 
-### Controles
+### Controls
 
-| Dispositivo | Controle |
+| Device | Input |
 |---|---|
-| Teclado | Setas ou WASD |
-| Mobile | Swipe no canvas ou D-pad na tela |
-| Gamepad | D-pad ou analógico esquerdo |
-
-### Ranking local
-
-As 5 melhores pontuações são salvas no `localStorage` do browser no formato:
-
-```json
-[
-  { "score": 42, "length": 15, "date": "09/03/2026" },
-  { "score": 30, "length": 11, "date": "08/03/2026" }
-]
-```
-
-A pontuação recém-feita é destacada em verde no ranking ao final de cada partida.
+| Keyboard | Arrow keys or WASD |
+| Mobile | Swipe on the canvas or on-screen D-pad |
+| Gamepad | D-pad or left analog stick |
 
 ---
 
-## Tecnologias
+## Technologies
 
 - HTML5 Canvas (OffscreenCanvas)
 - Web Workers
-- localStorage
 - Gamepad API
-- Vanilla JS — sem frameworks ou dependências
+- Vanilla JS — no frameworks or dependencies
