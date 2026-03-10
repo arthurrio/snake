@@ -106,6 +106,49 @@
       transition: color 0.3s;
     }
     #gamepad-status.on { color: #4ade80; }
+
+    /* ── Mobile / responsive ───────────────────────────────────────────────── */
+    #canvas-wrapper {
+      width: min(560px, calc(100vw - 8px), calc(100svh - 220px));
+      aspect-ratio: 1 / 1;
+    }
+
+    canvas { touch-action: none; width: 100%; height: 100%; }
+
+    /* D-pad */
+    #dpad {
+      display: none;
+      margin-top: 1.25rem;
+      grid-template-columns: repeat(3, 64px);
+      grid-template-rows: repeat(3, 64px);
+      gap: 6px;
+    }
+    #dpad button {
+      background: #1a1a1a;
+      color: #4ade80;
+      border: 1px solid #333;
+      border-radius: 8px;
+      font-size: 1.4rem;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.1s, border-color 0.1s;
+      -webkit-tap-highlight-color: transparent;
+    }
+    #dpad button:active { background: #166534; border-color: #4ade80; }
+    #dpad-up    { grid-column: 2; grid-row: 1; }
+    #dpad-left  { grid-column: 1; grid-row: 2; }
+    #dpad-right { grid-column: 3; grid-row: 2; }
+    #dpad-down  { grid-column: 2; grid-row: 3; }
+
+    @media (pointer: coarse), (max-width: 600px) {
+      #dpad { display: grid; }
+      h1 { font-size: 1.4rem; margin-bottom: 0.5rem; }
+      #hud { gap: 1rem; font-size: 0.8rem; margin-bottom: 0.5rem; flex-wrap: wrap; justify-content: center; }
+      #speed-btns button { min-width: 1.8rem; padding: 0.35rem 0.4rem; font-size: 0.75rem; }
+      #overlay button { padding: 0.7rem 2rem; font-size: 1rem; }
+    }
   </style>
 </head>
 <body>
@@ -142,8 +185,15 @@
         </div>
       </div>
       <button id="start-btn">START</button>
-      <p id="hint">Arrow keys · WASD · Gamepad</p>
+      <p id="hint">Arrow keys · WASD · Swipe · Gamepad</p>
     </div>
+  </div>
+
+  <div id="dpad">
+    <button id="dpad-up">▲</button>
+    <button id="dpad-left">◀</button>
+    <button id="dpad-right">▶</button>
+    <button id="dpad-down">▼</button>
   </div>
 
   <div id="gamepad-status">NO GAMEPAD</div>
@@ -638,6 +688,42 @@ document.getElementById('speed-btns').addEventListener('click', e => {
   selectedLevel = Number(btn.dataset.level);
   document.querySelectorAll('#speed-btns button').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
+});
+
+// ── Touch / swipe input ───────────────────────────────────────────────────────
+let touchStartX = 0, touchStartY = 0;
+
+canvas.addEventListener('touchstart', e => {
+  touchStartX = e.touches[0].clientX;
+  touchStartY = e.touches[0].clientY;
+  e.preventDefault();
+}, { passive: false });
+
+canvas.addEventListener('touchend', e => {
+  const dx = e.changedTouches[0].clientX - touchStartX;
+  const dy = e.changedTouches[0].clientY - touchStartY;
+  if (Math.abs(dx) < 10 && Math.abs(dy) < 10) return; // tap — ignore
+  if (Math.abs(dx) > Math.abs(dy)) {
+    pendingDir = dx > 0 ? { x: 1, y: 0 } : { x: -1, y: 0 };
+  } else {
+    pendingDir = dy > 0 ? { x: 0, y: 1 } : { x: 0, y: -1 };
+  }
+  e.preventDefault();
+}, { passive: false });
+
+// ── D-pad input ───────────────────────────────────────────────────────────────
+const DPAD_DIRS = {
+  'dpad-up':    { x: 0, y: -1 },
+  'dpad-down':  { x: 0, y:  1 },
+  'dpad-left':  { x: -1, y: 0 },
+  'dpad-right': { x:  1, y: 0 },
+};
+
+document.getElementById('dpad').addEventListener('pointerdown', e => {
+  const btn = e.target.closest('[id^="dpad-"]');
+  if (!btn) return;
+  pendingDir = DPAD_DIRS[btn.id] ?? null;
+  e.preventDefault();
 });
 
 // ── Start / restart ───────────────────────────────────────────────────────────
