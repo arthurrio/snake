@@ -2,27 +2,35 @@
 name: Test and Deploy
 
 on:
+  # Runs on pushes targeting the default branch
   push:
     branches: ["main"]
+
+  # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
 
+# Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
 permissions:
   contents: read
   pages: write
   id-token: write
 
+# Allow only one concurrent deployment, skipping runs queued between the run in-progress and latest queued.
+# However, do NOT cancel in-progress runs as we want to allow these production deployments to complete.
 concurrency:
   group: "pages"
   cancel-in-progress: false
 
 jobs:
   # ── Job 1: run the full test suite ─────────────────────────────────────────
+  # The deploy job depends on this one — if any test fails, deployment is blocked.
   test:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # Install Node.js and cache npm dependencies for faster runs
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -32,12 +40,15 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # Fast unit tests: game logic, speed formula, swipe detection, key mappings
       - name: Unit tests (Vitest)
         run: npm test
 
+      # Download Chromium and required system libraries for Playwright
       - name: Install Playwright browser + system deps
         run: npx playwright install --with-deps chromium
 
+      # Browser tests: layout, mobile viewports, touch, accessibility, game flow
       - name: E2E tests (Playwright)
         run: npm run test:e2e
 
@@ -55,6 +66,7 @@ jobs:
       - name: Setup Pages
         uses: actions/configure-pages@v5
 
+      # Upload the entire repository as the Pages artifact
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
