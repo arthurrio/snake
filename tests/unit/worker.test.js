@@ -21,6 +21,10 @@ const TOTAL = COLS * ROWS;
 const CELL  = 28;
 const DEATH_MS = 700;
 
+// Each apple eat calls spawnParticles which calls Math.random() 5 times per
+// particle, with 14 particles = 70 calls, followed by 1 call in spawnApple().
+const PARTICLE_RANDOMS = 70; // 14 particles × 5 calls each
+
 // ── Canvas / context stub ─────────────────────────────────────────────────────
 function makeCtx2D() {
   return {
@@ -38,30 +42,62 @@ function makeCanvas() {
 
 // ── Controlled Math.random sequence ──────────────────────────────────────────
 /**
- * Returns a Math object whose random() cycles through `values`.
- * Useful for placing apples at known positions.
+ * Returns a Math-like object whose random() cycles through `values`.
  *
- * Apple position: idx = (random() * TOTAL) | 0  →  x = idx % COLS, y = (idx / COLS) | 0
+ * IMPORTANT: Math properties are non-enumerable, so `{ ...Math }` loses them.
+ * We must copy via getOwnPropertyNames to keep sin, cos, etc.
  */
-function makeRng(...values) {
+function makeRng(values) {
   let i = 0;
-  return { ...Math, random: () => values[i++ % values.length] };
+  const m = {};
+  Object.getOwnPropertyNames(Math).forEach(k => { m[k] = Math[k]; });
+  m.random = () => values[i++ % values.length];
+  return m;
 }
 
-/** Convert grid coords (x,y) to the random() value that places an apple there. */
+/**
+ * Convert grid coordinates (x, y) to the Math.random() return value that
+ * places an apple exactly at that cell.
+ *
+ *   idx = (random * TOTAL) | 0  →  x = idx % COLS, y = (idx / COLS) | 0
+ */
 function appleRng(x, y) {
   return (y * COLS + x) / TOTAL;
+}
+
+/**
+ * Build a random-value sequence that places apples at the given positions,
+ * correctly accounting for the PARTICLE_RANDOMS calls that happen between
+ * apple eats (from spawnParticles, called inside tick() before spawnApple).
+ *
+ * Sequence layout:
+ *   [appleRng(pos[0]), ...filler×70, appleRng(pos[1]), ...filler×70, ...]
+ *
+ * The filler values (0.5) are consumed by spawnParticles and don't affect
+ * anything gameplay-relevant.  A final fallback value 0 is appended.
+ */
+function makeAppleRng(positions) {
+  const rng = [];
+  for (let i = 0; i < positions.length; i++) {
+    if (i > 0) {
+      // After each apple eat: PARTICLE_RANDOMS calls consumed by spawnParticles
+      for (let j = 0; j < PARTICLE_RANDOMS; j++) rng.push(0.5);
+    }
+    rng.push(appleRng(positions[i][0], positions[i][1]));
+  }
+  rng.push(0); // fallback: apple at (0,0) — far from snake path going right
+  return rng;
 }
 
 // ── Game factory ──────────────────────────────────────────────────────────────
 /**
  * Creates an isolated game instance.
  *
- * @param {object} opts
- * @param {number} [opts.tickMs=120]   Tick interval in ms.
- * @param {number[]} [opts.rng]        Sequence of Math.random() values.  If
- *                                     omitted, random() always returns 0
- *                                     → apple at (0, 0), out of the snake's path.
+ * @param {object}  opts
+ * @param {number}  [opts.tickMs=120]  Tick interval in ms.
+ * @param {number[]} [opts.rng]        Full Math.random() sequence.  When
+ *                                     omitted, apple always goes to (0,0) —
+ *                                     deterministic and out of the snake's path.
  */
 function createGame({ tickMs = 120, rng } = {}) {
   const messages = [];
@@ -72,7 +108,8 @@ function createGame({ tickMs = 120, rng } = {}) {
         messages.push(JSON.parse(JSON.stringify(m)));
       },
     },
-    Math: rng ? makeRng(...rng) : makeRng(0), // default: apple always at (0,0)
+    // Default rng: apple always at (0,0), well out of the snake's path right.
+    Math: makeRng(rng ?? [0]),
     OffscreenCanvas: class {
       constructor(w, h) { this.width = w; this.height = h; }
       getContext() { return makeCtx2D(); }
@@ -82,7 +119,6 @@ function createGame({ tickMs = 120, rng } = {}) {
   createContext(sandbox);
   runInContext(WORKER, sandbox);
 
-  // Alias: the worker sets self.onmessage after runInContext
   const emit = (data) => sandbox.self.onmessage({ data });
 
   emit({ type: 'init', canvas: makeCanvas() });
@@ -91,7 +127,7 @@ function createGame({ tickMs = 120, rng } = {}) {
   let ts = 0;
 
   /**
-   * Send `n` frame messages, each advancing ts by exactly one tick.
+   * Send `n` frame messages, each advancing ts by exactly one tick interval.
    * Optional `dir` is included in the FIRST frame only.
    */
   function advance(n = 1, dir = null) {
@@ -102,15 +138,15 @@ function createGame({ tickMs = 120, rng } = {}) {
   }
 
   /**
-   * After a collision, the worker waits DEATH_MS before sending 'end'.
-   * Call this to skip past the death animation.
+   * After a collision the worker waits DEATH_MS before sending 'end'.
+   * Skip past the death animation by jumping ts forward.
    */
   function skipDeathAnim() {
     ts += DEATH_MS + 50;
     emit({ type: 'frame', ts, dir: null });
   }
 
-  /** Last message of a given type (or null). */
+  /** Last message of a given type, or null. */
   function last(type) {
     for (let i = messages.length - 1; i >= 0; i--) {
       if (messages[i].type === type) return messages[i];
@@ -126,12 +162,12 @@ function createGame({ tickMs = 120, rng } = {}) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('initialisation', () => {
-  it('emits a hud message on start with score=0, combo=1, length=1', () => {
+  it('emits a hud message on start with score=0, combo=0, length=1', () => {
     const { last } = createGame();
     const hud = last('hud');
     expect(hud).not.toBeNull();
     expect(hud.score).toBe(0);
-    expect(hud.combo).toBe(1);
+    expect(hud.combo).toBe(0); // combo resets to 0 at init; first apple sets it to 1
     expect(hud.length).toBe(1);
   });
 
@@ -144,7 +180,7 @@ describe('initialisation', () => {
 // ── Wall collision ────────────────────────────────────────────────────────────
 describe('wall collision', () => {
   // Snake starts at (10,10) moving right.  Wall at x=20 → hit after 10 ticks.
-  // Apple is forced to (0,0) by rng=0, so it never gets eaten going right.
+  // Default rng places apple at (0,0) — never in the snake's rightward path.
 
   it('triggers game-over when the snake reaches the right wall', () => {
     const { advance, skipDeathAnim, last } = createGame();
@@ -157,10 +193,9 @@ describe('wall collision', () => {
 
   it('triggers game-over at the left wall', () => {
     const { advance, skipDeathAnim, last } = createGame();
-    // Turn left after 1 tick (need to move first so we can then turn back)
-    advance(1, { x: 0, y: -1 }); // go up
-    advance(1, { x: -1, y: 0 }); // go left
-    advance(11);                  // walk into left wall (need 11 steps: from x=10)
+    advance(1, { x: 0, y: -1 }); // turn up
+    advance(1, { x: -1, y: 0 }); // turn left
+    advance(11);                  // 11 more left steps → x reaches < 0
     skipDeathAnim();
     expect(last('end')?.won).toBe(false);
   });
@@ -168,7 +203,7 @@ describe('wall collision', () => {
   it('triggers game-over at the top wall', () => {
     const { advance, skipDeathAnim, last } = createGame();
     advance(1, { x: 0, y: -1 }); // turn up
-    advance(10);                  // x=10, y=10 → 10 steps up → y=0, then 1 more → wall
+    advance(10);                  // 10 up steps from y=10 → y=0 then y=-1
     skipDeathAnim();
     expect(last('end')?.won).toBe(false);
   });
@@ -176,7 +211,7 @@ describe('wall collision', () => {
   it('triggers game-over at the bottom wall', () => {
     const { advance, skipDeathAnim, last } = createGame();
     advance(1, { x: 0, y: 1 }); // turn down
-    advance(10);                 // 10 steps down: y=10→20 → wall
+    advance(10);                 // 10 down steps from y=10 → y=20 → wall
     skipDeathAnim();
     expect(last('end')?.won).toBe(false);
   });
@@ -185,30 +220,23 @@ describe('wall collision', () => {
 // ── Self collision ────────────────────────────────────────────────────────────
 describe('self collision', () => {
   it('triggers game-over when the snake runs into its own body', () => {
-    // Put apples at positions along the snake's path so it grows to length ≥ 4,
-    // then make it do a U-turn into itself.
+    // Grow to length 4 by eating apples at (11,10),(12,10),(13,10).
+    // Then steer up → left → down, bringing the head back into cell (12,10)
+    // which is still occupied by the body → self-collision.
     //
-    // Path: start (10,10) →right→ (11,10) eat → (12,10) eat → (13,10) eat
-    // Then: up → left → left → left → crash into own body at (12,10).
+    // Path (after eating 3):  snake = [(13,10),(12,10),(11,10),(10,10)]
+    //   advance up:   head=(13,9),  snake=[(13,9),(13,10),(12,10),(11,10)]
+    //   advance left: head=(12,9),  snake=[(12,9),(13,9),(13,10),(12,10)]
+    //   advance down: head=(12,10) → (12,10) IS in body → collision!
+
     const { advance, skipDeathAnim, last } = createGame({
-      rng: [
-        appleRng(11, 10), // 1st apple
-        appleRng(12, 10), // 2nd apple
-        appleRng(13, 10), // 3rd apple
-        0,                // 4th apple far away
-      ],
+      rng: makeAppleRng([[11, 10], [12, 10], [13, 10], [0, 0]]),
     });
 
-    advance(1); // eat at (11,10) — snake: [(11,10),(10,10)]
-    advance(1); // eat at (12,10) — snake: [(12,10),(11,10),(10,10)]
-    advance(1); // eat at (13,10) — snake: [(13,10),(12,10),(11,10),(10,10)]
-
-    advance(1, { x: 0, y: -1 }); // turn up  → head (13,9)
-    advance(1, { x: -1, y: 0 }); // turn left → head (12,9)
-    advance(1);                   // still left → head (11,9)
-    advance(1);                   // still left → head (10,9)
-    advance(1, { x: 0, y: 1 });  // turn down → head (10,10)
-    advance(1, { x: 1, y: 0 });  // turn right → head (11,10) — body still there!
+    advance(3);                    // eat 3 apples → length=4
+    advance(1, { x: 0, y: -1 });  // turn up
+    advance(1, { x: -1, y: 0 });  // turn left
+    advance(1, { x: 0, y:  1 });  // turn down → crash into (12,10)
 
     skipDeathAnim();
     expect(last('end')?.won).toBe(false);
@@ -218,62 +246,67 @@ describe('self collision', () => {
 // ── Apple eating & score ──────────────────────────────────────────────────────
 describe('apple eating', () => {
   it('increments score by 1 on first apple (combo=1)', () => {
-    // Place apple at (11,10) — one step right of the snake head
-    const { advance, last } = createGame({ rng: [appleRng(11, 10), 0] });
-    advance(1); // snake moves right, eats apple at (11,10)
+    const { advance, last } = createGame({
+      rng: makeAppleRng([[11, 10], [0, 0]]),
+    });
+    advance(1); // eat at (11,10)
     const hud = last('hud');
     expect(hud.score).toBe(1);
     expect(hud.combo).toBe(1);
   });
 
   it('grows the snake by 1 when eating an apple', () => {
-    const { advance, last } = createGame({ rng: [appleRng(11, 10), 0] });
-    const before = last('hud').length;
+    const { advance, last } = createGame({
+      rng: makeAppleRng([[11, 10], [0, 0]]),
+    });
+    const before = last('hud').length; // 1
     advance(1);
     expect(last('hud').length).toBe(before + 1);
   });
 
   it('does NOT change score when moving to an empty cell', () => {
-    // default rng → apple at (0,0), snake moves right — no eating
+    // Default rng: apple at (0,0), snake moves right — never passes (0,0).
     const { advance, last } = createGame();
     const before = last('hud').score;
     advance(3);
-    expect(last('hud').score).toBe(before); // still 0
+    expect(last('hud').score).toBe(before);
   });
 
-  it('spawns a new apple after eating (game keeps running)', () => {
+  it('spawns a new apple after eating (game keeps running until wall)', () => {
+    // Eat at (11,10), then move right 9 more steps to hit the wall at x=20.
     const { advance, skipDeathAnim, last } = createGame({
-      rng: [appleRng(11, 10), 0],
+      rng: makeAppleRng([[11, 10], [0, 0]]),
     });
-    advance(1); // eat at (11,10), new apple at (0,0)
-    advance(8); // move right 8 more steps — hits wall at 20, but no eat
+    advance(1);  // eat at (11,10), 2nd apple at (0,0)
+    advance(9);  // 9 more right steps: x=12→20 → wall hit
     skipDeathAnim();
-    // Game over means there was a new apple (otherwise win or nothing)
     expect(last('end')?.won).toBe(false);
   });
 });
 
 // ── Combo system ──────────────────────────────────────────────────────────────
 describe('combo system', () => {
-  it('combo stays 1 on first apple', () => {
-    const { advance, last } = createGame({ rng: [appleRng(11, 10), 0] });
+  it('combo is 1 on first apple', () => {
+    const { advance, last } = createGame({
+      rng: makeAppleRng([[11, 10], [0, 0]]),
+    });
     advance(1);
     expect(last('hud').combo).toBe(1);
   });
 
   it('combo increments to 2 when eating a second apple within the window', () => {
-    // apples at (11,10) and (12,10) — eaten on consecutive ticks
+    // Consecutive eats at (11,10) and (12,10) — 1 tick apart = well within 3000ms.
     const { advance, last } = createGame({
-      rng: [appleRng(11, 10), appleRng(12, 10), 0],
+      rng: makeAppleRng([[11, 10], [12, 10], [0, 0]]),
     });
-    advance(1); // eat 1st: combo=1
-    advance(1); // eat 2nd: combo=2
+    advance(1); // eat 1st → combo=1
+    advance(1); // eat 2nd → combo=2
     expect(last('hud').combo).toBe(2);
   });
 
-  it('score is +2 on a x2 combo', () => {
+  it('score is +2 on a x2 combo (total score = 1+2 = 3)', () => {
     const { advance, last } = createGame({
-      rng: [appleRng(11, 10), appleRng(12, 10), 0],
+      rng: makeAppleRng([[11, 10], [12, 10], [0, 0]]),
     });
     advance(1); // +1 (combo 1) → score=1
     advance(1); // +2 (combo 2) → score=3
@@ -281,64 +314,45 @@ describe('combo system', () => {
   });
 
   it('combo resets to 1 after the 3-second window expires', () => {
-    // Eat first apple, then advance > 3000 ms before eating next
-    const TICK = 120;
+    // Eat 1st apple normally, then send a frame jumping ts by >3000 ms.
+    // The worker's catch-up guard fires exactly 1 tick; currentTs will be
+    // ~4000ms after the 1st eat → timeSinceLast > COMBO_WINDOW_MS → reset.
     const { advance, emit, last } = createGame({
-      tickMs: TICK,
-      rng: [appleRng(11, 10), appleRng(12, 10), 0],
+      rng: makeAppleRng([[11, 10], [12, 10], [0, 0]]),
     });
 
-    advance(1); // eat 1st apple at ts≈121 → combo=1
+    advance(1); // eat at (11,10), ts≈121, lastEatTs=121
 
-    // Jump time by 4000 ms without triggering more ticks (big gap resets lastEatTs window)
-    // We need to be careful not to catch up more than 8 ticks (worker guard: tickMs*8)
-    // So we advance via individual frames each just under tickMs to simulate elapsed time
-    // without triggering many extra game ticks.
-    // Simplest: set ts directly via a frame that is > 3000ms later but fires 0 ticks.
-    // (no ticks fire if ts - lastTick < tickMs)
-    //
-    // After advance(1): lastTick ≈ 120, ts ≈ 121.
-    // To prevent ticks but pass 3000ms: set ts to lastTick + tickMs*8 + 1 so worker resets
-    // lastTick = ts - tickMs, then emits exactly 1 tick.
-    // This is complex — instead we use 4000ms jump & let the guard kick in.
-    //
-    // Worker guard: if ts - lastTick > tickMs*8 (960 ms), lastTick = ts - tickMs.
-    // So a 4000ms jump → lastTick = ts - 120 → exactly 1 tick fires.
-    // But that tick moves the snake one step — it's at (11,10) having eaten apple 1,
-    // and apple 2 is at (12,10). So that tick eats apple 2! currentTs will be ~4121.
-    // timeSinceLast = 4121 - 121 = 4000 > 3000 → combo resets to 1. ✓
-
-    emit({ data: { type: 'frame', ts: 4121, dir: null } });
+    // Jump ts by ~4000ms in one frame.
+    // Worker guard: if ts - lastTick > tickMs*8, reset lastTick = ts - tickMs.
+    // Then 1 tick fires.  currentTs = 4121.
+    // timeSinceLast = 4121 - 121 = 4000 > 3000 → combo resets to 1.
+    emit({ type: 'frame', ts: 4121, dir: null });
 
     const hud = last('hud');
-    expect(hud.combo).toBe(1); // reset because > 3000ms gap
-    expect(hud.score).toBe(2); // 1 + 1 (combo=1 again)
+    expect(hud.combo).toBe(1);  // was reset
+    expect(hud.score).toBe(2);  // 1 + 1 (second apple adds 1 at combo=1)
   });
 });
 
 // ── Direction: 180° reversal prevention ──────────────────────────────────────
 describe('direction reversal prevention', () => {
-  it('ignores a 180° reversal (right then immediately left) — snake keeps going right', () => {
-    // Snake starts moving right. Attempting to go left immediately should be ignored.
-    // After 10 ticks right it should still hit the wall (not a self-collision).
+  it('ignores a 180° reversal — snake keeps going right and hits the right wall', () => {
+    // Snake starts moving right. Sending left (opposite) should be ignored.
+    // After 10 ticks right it should hit the wall, not self-collide sooner.
     const { advance, skipDeathAnim, last } = createGame();
 
-    // Try to reverse to left on first frame — should be ignored
-    advance(1, { x: -1, y: 0 });
-
-    // Snake should still be moving right. Another 9 ticks → wall
-    advance(9);
+    advance(1, { x: -1, y: 0 }); // attempt reversal → blocked
+    advance(9);                   // 9 more right steps → wall at x=20
     skipDeathAnim();
 
-    const end = last('end');
-    expect(end?.won).toBe(false); // died on wall, not earlier
-    expect(end?.score).toBe(0);   // no apples eaten
+    expect(last('end')?.won).toBe(false);
+    expect(last('end')?.score).toBe(0); // no apples eaten
   });
 
-  it('ignores a duplicate direction (sending right when already going right)', () => {
+  it('ignores a duplicate direction (same as current)', () => {
     const { advance, skipDeathAnim, last } = createGame();
-    // Send right (same as current direction) — should be a no-op
-    advance(1, { x: 1, y: 0 });
+    advance(1, { x: 1, y: 0 }); // same direction as initial → no-op
     advance(9);
     skipDeathAnim();
     expect(last('end')?.won).toBe(false);
@@ -347,81 +361,50 @@ describe('direction reversal prevention', () => {
 
 // ── Direction queue ───────────────────────────────────────────────────────────
 describe('direction queue', () => {
-  it('accepts a buffered turn applied on the next tick', () => {
-    // Move up immediately → after enough ticks, snake hits the top wall.
-    // If the queue did NOT work, it would keep going right and hit the right wall.
+  it('accepts a buffered turn and applies it on the next tick', () => {
+    // Turn up immediately.  After enough ticks the snake should hit the top wall
+    // (not the right wall) — proving the direction change was applied.
     const { advance, skipDeathAnim, last } = createGame();
 
     advance(1, { x: 0, y: -1 }); // queue: turn up
-    advance(10);                  // 10 more ticks, snake goes up eventually
+    advance(10);                  // 10 more ticks upward → hits top wall
     skipDeathAnim();
 
-    // Both right-wall and top-wall produce won=false.
-    // The distinguishing factor: going up from (10,10), hits y=0 after 10 ticks
-    // (not 10 right to wall). Either way it's a wall death.
+    // Either the top or right wall causes won=false.
     expect(last('end')?.won).toBe(false);
   });
 });
 
 // ── Win condition ─────────────────────────────────────────────────────────────
 describe('win condition', () => {
-  it('emits end with won=true when snake fills the entire grid', () => {
-    // Build a game with a deterministic RNG that fills the grid in a known path.
-    // This is complex to set up in isolation, so we simulate it via the message
-    // protocol: manually synthesise the 'end' flow by checking the worker correctly
-    // wins when snake.length === TOTAL.
-    //
-    // Practical approach: create a very small grid is not possible (COLS/ROWS are
-    // hardcoded). Instead we verify the score/length reported in the final hud
-    // matches TOTAL by eating apples along a long path.
-    //
-    // Full win simulation requires 400 apples and exact RNG control — too expensive
-    // for a unit test. We test the invariant that 'end.won=true' is possible by
-    // confirming the worker sends it when the snake length equals TOTAL.
-    //
-    // We do this by intercepting messages: after TOTAL-1 apples the next frame
-    // should trigger the win.  We chain apples along the first row (y=0).
-    //
-    // Abbreviated version: just verify the formula in worker source via the
-    // observable HUD length — snake grows on each eat.
-    const rng = [];
-    // Place apples along x=11..19 (y=10) and x=0..19 (y=0) etc.
-    // For simplicity: place them consecutively right of the snake.
-    for (let x = 11; x < COLS; x++) rng.push(appleRng(x, 10));
-    // rest of the grid in row 0 for subsequent apples
-    for (let y = 9; y >= 0; y--) {
-      for (let x = COLS - 1; x >= 0; x--) rng.push(appleRng(x, y));
-    }
-    rng.push(0); // fallback
+  it('snake grows by 1 for each apple eaten (length tracking)', () => {
+    // Eat 9 consecutive apples along row y=10 (x=11..19).
+    // After 9 eats, length should be 10 (started at 1, grew 9 times).
+    const positions = [];
+    for (let x = 11; x < COLS; x++) positions.push([x, 10]);
+    positions.push([0, 0]); // fallback after all 9
 
-    const { advance, last } = createGame({ rng });
+    const { advance, last } = createGame({
+      rng: makeAppleRng(positions),
+    });
 
-    // Eat apples consecutively moving right from x=10 to x=19 (9 apples)
-    advance(9);
-    const hud = last('hud');
-    // snake should have grown by 9
-    expect(hud.length).toBe(10);
-    expect(hud.score).toBeGreaterThanOrEqual(9);
+    advance(9); // eat 9 apples, each on consecutive right steps
+    expect(last('hud').length).toBe(10);
+    expect(last('hud').score).toBeGreaterThanOrEqual(9);
   });
 });
 
 // ── Apple spawn invariant ─────────────────────────────────────────────────────
 describe('apple spawn', () => {
-  it('apple is never placed on the snake body', () => {
-    // Eat several apples to grow the snake, then confirm hud messages show the game
-    // is still running (no collision triggered by bad spawn).
+  it('apple is never placed on the snake body (game runs without spurious collision)', () => {
+    // Eat 4 consecutive apples. If the apple ever spawned on the snake body,
+    // the next tick would trigger a self-collision instead of another eat.
+    // A clean hud.length=5 after 4 eats proves the spawn was always safe.
     const { advance, last } = createGame({
-      rng: [
-        appleRng(11, 10),
-        appleRng(12, 10),
-        appleRng(13, 10),
-        appleRng(14, 10),
-        0,
-      ],
+      rng: makeAppleRng([[11, 10], [12, 10], [13, 10], [14, 10], [0, 0]]),
     });
     advance(4); // eat 4 consecutive apples
-    expect(last('hud').length).toBe(5); // grew correctly
-    // No 'end' message means no accidental collision from bad apple spawn
-    expect(last('end')).toBeNull();
+    expect(last('hud').length).toBe(5);
+    expect(last('end')).toBeNull(); // no accidental collision
   });
 });
