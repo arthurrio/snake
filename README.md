@@ -18,15 +18,140 @@ A modern Snake game running in the browser, with smooth rendering, visual effect
 
 ---
 
+## Prerequisites
+
+To run the tests or serve the project locally, you need:
+
+| Tool | Version | Purpose |
+|---|---|---|
+| [Node.js](https://nodejs.org/) | 18+ (22 recommended) | Run tests |
+| [npm](https://www.npmjs.com/) | 9+ | Install dependencies |
+
+> **No runtime is required to play the game.** It is pure HTML/CSS/JS and runs directly in any modern browser by opening `index.html`.
+
+### Installing Node.js
+
+The recommended way is via **nvm**:
+
+```bash
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash
+source ~/.bashrc   # or ~/.zshrc
+nvm install 22
+```
+
+### Installing dependencies
+
+```bash
+npm install
+```
+
+For E2E tests, also install the Playwright browser:
+
+```bash
+npx playwright install chromium
+# On Linux, also install system dependencies:
+sudo npx playwright install-deps chromium
+```
+
+---
+
 ## Project structure
 
 ```
 snake/
-├── index.html   # HTML structure
-├── style.css    # Styles and responsive layout
-├── main.js      # Main thread: input, HUD
-└── worker.js    # Web Worker: game logic and rendering
+├── index.html           # HTML structure
+├── style.css            # Styles and responsive layout
+├── main.js              # Main thread: input, HUD
+├── worker.js            # Web Worker: game logic and rendering
+├── package.json         # Project metadata and test scripts
+├── vitest.config.js     # Unit test configuration (Vitest)
+├── playwright.config.js # E2E test configuration (Playwright)
+└── tests/
+    ├── unit/
+    │   ├── worker.test.js   # Game logic tests (collision, combo, etc.)
+    │   └── main.test.js     # Pure function tests (speed, swipe, keys)
+    └── e2e/
+        └── game.spec.js     # Browser tests (layout, mobile, accessibility)
 ```
+
+---
+
+## Running the tests
+
+### Unit tests (Vitest)
+
+Fast, no browser required. Tests the game logic directly inside a Node.js sandbox.
+
+```bash
+npm test
+```
+
+Covers:
+- Wall and self-collision detection
+- Apple eating, score and snake growth
+- Combo system (chaining and 3-second reset)
+- 180° reversal prevention and direction queue
+- Speed level formula (`levelToTickMs`)
+- Touch swipe direction detection
+- Keyboard and D-pad mappings
+
+### E2E tests (Playwright)
+
+Runs the game in a real headless browser and simulates user interactions.
+
+```bash
+npm run test:e2e
+```
+
+Covers:
+- Page load and overlay visibility
+- Game start and HUD values
+- Speed buttons (selection, `aria-pressed` state)
+- Keyboard controls (arrows and WASD)
+- Game over flow (overlay, focus, button text)
+- Mobile layout — D-pad and all 10 speed buttons visible on 4 viewport sizes (iPhone SE, iPhone 13, Pixel 5, Galaxy S21)
+- Mobile touch — tap and swipe interactions
+- Accessibility (ARIA roles, `aria-live`, `aria-pressed`)
+
+### Run everything
+
+```bash
+npm run test:all
+```
+
+---
+
+## Publishing
+
+The game is hosted on **GitHub Pages** via a GitHub Actions workflow. Follow these steps to publish a new version:
+
+### 1. Make your changes
+
+Edit the source files (`index.html`, `style.css`, `main.js`, `worker.js`).
+
+### 2. Run the tests
+
+Before committing, make sure all tests pass:
+
+```bash
+npm run test:all
+```
+
+All 77 tests (45 unit + 32 E2E) must pass before proceeding.
+
+### 3. Commit and push
+
+```bash
+git add .
+git commit -m "describe your change"
+git push origin main
+```
+
+### 4. GitHub Actions deploys automatically
+
+After pushing to `main`, the workflow builds and deploys to GitHub Pages. The live URL updates in about 1–2 minutes:
+
+**[https://arthurrio.github.io/snake/](https://arthurrio.github.io/snake/)**
 
 ---
 
@@ -115,3 +240,5 @@ Eating apples within 3 seconds of each other chains a combo. The multiplier grow
 - Web Workers
 - Gamepad API
 - Vanilla JS — no frameworks or dependencies
+- [Vitest](https://vitest.dev/) — unit tests
+- [Playwright](https://playwright.dev/) — E2E and mobile tests
