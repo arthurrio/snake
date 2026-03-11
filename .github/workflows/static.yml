@@ -1,12 +1,9 @@
-# Workflow: run tests then deploy to GitHub Pages
-name: Test and Deploy
+# Workflow: run tests then deploy to GitHub Pages (main branch only)
+name: Deploy
 
 on:
-  # Runs on pushes targeting the default branch
   push:
     branches: ["main"]
-
-  # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
 
 # Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
@@ -30,7 +27,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # Install Node.js and cache npm dependencies for faster runs
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
