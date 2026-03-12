@@ -311,14 +311,30 @@ function drawSnakeInterp(t) {
 
   snake.forEach((seg, i) => {
     const prev = prevSnake[i] ?? seg;
-    const rx = (prev.x + (seg.x - prev.x) * s) * CELL + pad;
-    const ry = (prev.y + (seg.y - prev.y) * s) * CELL + pad;
+
+    // Detect a wrap-around jump (delta > half the grid on either axis).
+    // When wrapping, skip position interpolation and fade the segment in
+    // instead, producing a "disappear / reappear" effect rather than a
+    // visible slide across the entire grid.
+    const wrap = Math.abs(seg.x - prev.x) > COLS / 2 ||
+                 Math.abs(seg.y - prev.y) > ROWS / 2;
+
+    let rx, ry;
+    if (wrap) {
+      rx = seg.x * CELL + pad;
+      ry = seg.y * CELL + pad;
+      ctx.globalAlpha = s; // fade in from transparent to opaque
+    } else {
+      rx = (prev.x + (seg.x - prev.x) * s) * CELL + pad;
+      ry = (prev.y + (seg.y - prev.y) * s) * CELL + pad;
+    }
 
     const brightness = 1 - i / len;
     const g = (174 + brightness * 60) | 0;
     ctx.fillStyle = i === 0 ? '#a3e635' : `rgb(30,${g},60)`;
     roundRect(rx, ry, w, h, 4); ctx.fill();
     if (i === 0) drawEyes(rx, ry, w, h);
+    ctx.globalAlpha = 1;
   });
 
   if (prevSnake.length === snake.length && snake.length > 1) {
