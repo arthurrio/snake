@@ -64,6 +64,7 @@ self.onmessage = ({ data }) => {
         prevSnake = snake.map(s => ({ x: s.x, y: s.y }));
         lastTick += tickMs;
         tick();
+        postHud(); // keep head/apple positions current for every game step
       }
 
       updateParticles(dt);
@@ -115,11 +116,12 @@ function spawnApple() {
 function tick() {
   if (dirQueue.length) dir = dirQueue.shift();
 
-  const head = { x: snake[0].x + dir.x, y: snake[0].y + dir.y };
+  // Wrap around: crossing a wall teleports the snake to the opposite side
+  const head = {
+    x: ((snake[0].x + dir.x) + COLS) % COLS,
+    y: ((snake[0].y + dir.y) + ROWS) % ROWS,
+  };
 
-  if (head.x < 0 || head.x >= COLS || head.y < 0 || head.y >= ROWS) {
-    endGame(false); return;
-  }
   if (snake.some(s => s.x === head.x && s.y === head.y)) {
     endGame(false); return;
   }
@@ -309,25 +311,46 @@ function drawSnakeInterp(t) {
 
   snake.forEach((seg, i) => {
     const prev = prevSnake[i] ?? seg;
-    const rx = (prev.x + (seg.x - prev.x) * s) * CELL + pad;
-    const ry = (prev.y + (seg.y - prev.y) * s) * CELL + pad;
+
+    // Detect a wrap-around jump (delta > half the grid on either axis).
+    // When wrapping, skip position interpolation and fade the segment in
+    // instead, producing a "disappear / reappear" effect rather than a
+    // visible slide across the entire grid.
+    const wrap = Math.abs(seg.x - prev.x) > COLS / 2 ||
+                 Math.abs(seg.y - prev.y) > ROWS / 2;
+
+    let rx, ry;
+    if (wrap) {
+      rx = seg.x * CELL + pad;
+      ry = seg.y * CELL + pad;
+      ctx.globalAlpha = s; // fade in from transparent to opaque
+    } else {
+      rx = (prev.x + (seg.x - prev.x) * s) * CELL + pad;
+      ry = (prev.y + (seg.y - prev.y) * s) * CELL + pad;
+    }
 
     const brightness = 1 - i / len;
     const g = (174 + brightness * 60) | 0;
     ctx.fillStyle = i === 0 ? '#a3e635' : `rgb(30,${g},60)`;
     roundRect(rx, ry, w, h, 4); ctx.fill();
     if (i === 0) drawEyes(rx, ry, w, h);
+    ctx.globalAlpha = 1;
   });
 
   if (prevSnake.length === snake.length && snake.length > 1) {
     const tail = prevSnake[prevSnake.length - 1];
     const ref  = prevSnake[prevSnake.length - 2];
-    const rx = (tail.x + (ref.x - tail.x) * s) * CELL + pad;
-    const ry = (tail.y + (ref.y - tail.y) * s) * CELL + pad;
-    ctx.globalAlpha = 1 - s;
-    ctx.fillStyle = 'rgb(30,174,60)';
-    roundRect(rx, ry, w, h, 4); ctx.fill();
-    ctx.globalAlpha = 1;
+    // Skip the ghost tail if it would wrap around — just let it vanish instantly.
+    const tailWrap = Math.abs(ref.x - tail.x) > COLS / 2 ||
+                     Math.abs(ref.y - tail.y) > ROWS / 2;
+    if (!tailWrap) {
+      const rx = (tail.x + (ref.x - tail.x) * s) * CELL + pad;
+      const ry = (tail.y + (ref.y - tail.y) * s) * CELL + pad;
+      ctx.globalAlpha = 1 - s;
+      ctx.fillStyle = 'rgb(30,174,60)';
+      roundRect(rx, ry, w, h, 4); ctx.fill();
+      ctx.globalAlpha = 1;
+    }
   }
 }
 
@@ -354,5 +377,10 @@ function roundRect(x, y, w, h, r) {
 }
 
 function postHud() {
-  self.postMessage({ type: 'hud', score, best, length: snake.length, combo });
+  self.postMessage({
+    type: 'hud', score, best, length: snake.length, combo,
+    // Head and apple positions exposed so E2E tests can navigate toward the apple
+    headX: snake[0].x, headY: snake[0].y,
+    appleX: apple?.x ?? -1, appleY: apple?.y ?? -1,
+  });
 }
