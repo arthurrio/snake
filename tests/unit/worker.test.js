@@ -163,12 +163,12 @@ function createGame({ tickMs = 120, rng } = {}) {
 
 describe('initialisation', () => {
   // On game start the worker must emit a hud message with zeroed-out values
-  it('emits a hud message on start with score=0, combo=0, length=1', () => {
+  it('emits a hud message on start with score=0, combo=1, length=1', () => {
     const { last } = createGame();
     const hud = last('hud');
     expect(hud).not.toBeNull();
     expect(hud.score).toBe(0);
-    expect(hud.combo).toBe(0); // combo resets to 0 at init; first apple sets it to 1
+    expect(hud.combo).toBe(1); // combo starts at 1 (neutral multiplier); increments on chained apples
     expect(hud.length).toBe(1);
   });
 
