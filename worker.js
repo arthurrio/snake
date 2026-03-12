@@ -340,12 +340,17 @@ function drawSnakeInterp(t) {
   if (prevSnake.length === snake.length && snake.length > 1) {
     const tail = prevSnake[prevSnake.length - 1];
     const ref  = prevSnake[prevSnake.length - 2];
-    const rx = (tail.x + (ref.x - tail.x) * s) * CELL + pad;
-    const ry = (tail.y + (ref.y - tail.y) * s) * CELL + pad;
-    ctx.globalAlpha = 1 - s;
-    ctx.fillStyle = 'rgb(30,174,60)';
-    roundRect(rx, ry, w, h, 4); ctx.fill();
-    ctx.globalAlpha = 1;
+    // Skip the ghost tail if it would wrap around — just let it vanish instantly.
+    const tailWrap = Math.abs(ref.x - tail.x) > COLS / 2 ||
+                     Math.abs(ref.y - tail.y) > ROWS / 2;
+    if (!tailWrap) {
+      const rx = (tail.x + (ref.x - tail.x) * s) * CELL + pad;
+      const ry = (tail.y + (ref.y - tail.y) * s) * CELL + pad;
+      ctx.globalAlpha = 1 - s;
+      ctx.fillStyle = 'rgb(30,174,60)';
+      roundRect(rx, ry, w, h, 4); ctx.fill();
+      ctx.globalAlpha = 1;
+    }
   }
 }
 
