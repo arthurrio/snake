@@ -34,6 +34,11 @@ worker.onmessage = ({ data }) => {
     comboEl.textContent = `x${data.combo}`;
     comboEl.classList.toggle('hot', data.combo > 1);
     if (data.combo > 1) { clearTimeout(comboEl._t); comboEl._t = setTimeout(() => comboEl.classList.remove('hot'), 300); }
+    // Expose positions as data attributes so E2E tests can navigate toward the apple
+    canvas.dataset.headX  = data.headX;
+    canvas.dataset.headY  = data.headY;
+    canvas.dataset.appleX = data.appleX;
+    canvas.dataset.appleY = data.appleY;
   } else if (data.type === 'end') {
     if (data.won) {
       overlayTitle.textContent = 'YOU WIN!';

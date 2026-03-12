@@ -179,47 +179,40 @@ describe('initialisation', () => {
   });
 });
 
-// ── Wall collision ────────────────────────────────────────────────────────────
-describe('wall collision', () => {
-  // Snake starts at (10,10) moving right.  Wall at x=20 → hit after 10 ticks.
-  // Default rng places apple at (0,0) — never in the snake's rightward path.
+// ── Wall wrap-around ──────────────────────────────────────────────────────────
+describe('wall wrap-around', () => {
+  // Snake starts at (10,10) moving right. Default rng places apple at (0,0).
 
-  // Starting at x=10 and moving right, the snake reaches the out-of-bounds column x=20 after 10 ticks
-  it('triggers game-over when the snake reaches the right wall', () => {
-    const { advance, skipDeathAnim, last } = createGame();
-    advance(10); // 10 ticks rightward → x=20 → wall
-    skipDeathAnim();
-    const end = last('end');
-    expect(end).not.toBeNull();
-    expect(end.won).toBe(false);
+  // Crossing x=19 → x=0: snake must survive and keep running
+  it('wraps from the right edge to the left instead of dying', () => {
+    const { advance, last } = createGame();
+    advance(10); // 10 right steps: x = (10+10) % 20 = 0 — no wall death
+    expect(last('end')).toBeNull();
   });
 
-  // Turn up, then left and keep going until the snake exits the grid on the left side (x < 0)
-  it('triggers game-over at the left wall', () => {
-    const { advance, skipDeathAnim, last } = createGame();
-    advance(1, { x: 0, y: -1 }); // turn up
+  // Crossing x=0 → x=19: snake must survive and keep running
+  it('wraps from the left edge to the right instead of dying', () => {
+    const { advance, last } = createGame();
+    advance(1, { x: 0, y: -1 }); // turn up (left is a 180° reversal from right)
     advance(1, { x: -1, y: 0 }); // turn left
-    advance(11);                  // 11 more left steps → x reaches < 0
-    skipDeathAnim();
-    expect(last('end')?.won).toBe(false);
+    advance(11);                  // 11 left steps from x=10 → x=-1 → wraps to x=19
+    expect(last('end')).toBeNull();
   });
 
-  // Turn up and keep going until the snake exits the grid through the top (y < 0)
-  it('triggers game-over at the top wall', () => {
-    const { advance, skipDeathAnim, last } = createGame();
+  // Crossing y=0 → y=19: snake must survive and keep running
+  it('wraps from the top edge to the bottom instead of dying', () => {
+    const { advance, last } = createGame();
     advance(1, { x: 0, y: -1 }); // turn up
-    advance(10);                  // 10 up steps from y=10 → y=0 then y=-1
-    skipDeathAnim();
-    expect(last('end')?.won).toBe(false);
+    advance(11);                  // 11 up steps from y=10 → y=-1 → wraps to y=19
+    expect(last('end')).toBeNull();
   });
 
-  // Turn down and keep going until the snake exits the grid through the bottom (y >= ROWS)
-  it('triggers game-over at the bottom wall', () => {
-    const { advance, skipDeathAnim, last } = createGame();
+  // Crossing y=19 → y=0: snake must survive and keep running
+  it('wraps from the bottom edge to the top instead of dying', () => {
+    const { advance, last } = createGame();
     advance(1, { x: 0, y: 1 }); // turn down
-    advance(10);                 // 10 down steps from y=10 → y=20 → wall
-    skipDeathAnim();
-    expect(last('end')?.won).toBe(false);
+    advance(10);                 // 10 down steps from y=10 → y=20 → wraps to y=0
+    expect(last('end')).toBeNull();
   });
 });
 
@@ -281,15 +274,15 @@ describe('apple eating', () => {
     expect(last('hud').score).toBe(before);
   });
 
-  // After eating, a new apple must be spawned and the game must keep running until the next collision
-  it('spawns a new apple after eating (game keeps running until wall)', () => {
-    const { advance, skipDeathAnim, last } = createGame({
+  // After eating, a new apple must be spawned and the game must keep running
+  it('spawns a new apple after eating (game keeps running)', () => {
+    const { advance, last } = createGame({
       rng: makeAppleRng([[11, 10], [0, 0]]),
     });
-    advance(1);  // eat at (11,10), 2nd apple at (0,0)
-    advance(9);  // 9 more right steps: x=12→20 → wall hit
-    skipDeathAnim();
-    expect(last('end')?.won).toBe(false);
+    advance(1);  // eat at (11,10), 2nd apple spawns at (0,0)
+    advance(9);  // 9 more right steps — snake wraps, no wall death
+    expect(last('end')).toBeNull();
+    expect(last('hud').score).toBe(1); // only the first apple was eaten
   });
 });
 
@@ -349,41 +342,48 @@ describe('combo system', () => {
 
 // ── Direction: 180° reversal prevention ──────────────────────────────────────
 describe('direction reversal prevention', () => {
-  // Attempting a 180° reversal (right → left) must be silently ignored; the snake continues right and hits the wall
-  it('ignores a 180° reversal — snake keeps going right and hits the right wall', () => {
-    const { advance, skipDeathAnim, last } = createGame();
+  // If the reversal were NOT blocked, the head would step onto the body (length ≥ 2) → game over.
+  // A surviving game proves the reversal was correctly ignored.
+  it('ignores a 180° reversal — snake keeps moving in the original direction', () => {
+    // Grow snake to length 2 by eating the apple at (11,10).
+    // Snake: [(11,10),(10,10)] going right.
+    // Attempt right→left reversal: if not blocked, head hits (10,10) → self-collision.
+    // If correctly blocked, head goes to (12,10) → game keeps running.
+    const { advance, last } = createGame({
+      rng: makeAppleRng([[11, 10], [0, 0]]),
+    });
+    advance(1);                   // eat apple at (11,10), length=2
+    advance(1, { x: -1, y: 0 }); // attempt reversal → must be blocked
 
-    advance(1, { x: -1, y: 0 }); // attempt reversal → blocked
-    advance(9);                   // 9 more right steps → wall at x=20
-    skipDeathAnim();
-
-    expect(last('end')?.won).toBe(false);
-    expect(last('end')?.score).toBe(0); // no apples eaten
+    expect(last('end')).toBeNull();   // no collision → reversal was ignored
+    expect(last('hud').score).toBe(1); // no extra apple eaten
   });
 
-  // Sending the same direction that is already active must be a no-op — the snake does not stop or change
+  // Sending the same direction that is already active must be a no-op
   it('ignores a duplicate direction (same as current)', () => {
-    const { advance, skipDeathAnim, last } = createGame();
-    advance(1, { x: 1, y: 0 }); // same direction as initial → no-op
-    advance(9);
-    skipDeathAnim();
-    expect(last('end')?.won).toBe(false);
+    const { advance, last } = createGame({
+      rng: makeAppleRng([[11, 10], [0, 0]]),
+    });
+    advance(1);                  // eat apple, length=2
+    advance(1, { x: 1, y: 0 }); // same direction (right) → no-op, snake keeps going right
+    expect(last('end')).toBeNull();
   });
 });
 
 // ── Direction queue ───────────────────────────────────────────────────────────
 describe('direction queue', () => {
-  // A direction change sent in a frame must be buffered and applied on the very next game tick
+  // A direction change sent in a frame must be buffered and applied on the very next game tick.
+  // We place an apple directly above the snake's start position (10,9).
+  // If the up-turn is applied: head moves to (10,9) → eats apple → score=1.
+  // If the turn is ignored:   head moves to (11,10) → no apple → score=0.
   it('accepts a buffered turn and applies it on the next tick', () => {
-    // Turn up immediately.  After enough ticks the snake should hit the top wall
-    // (not the right wall) — proving the direction change was applied.
-    const { advance, skipDeathAnim, last } = createGame();
+    const { advance, last } = createGame({
+      rng: makeAppleRng([[10, 9], [0, 0]]),
+    });
 
-    advance(1, { x: 0, y: -1 }); // queue: turn up
-    advance(10);                  // 10 more ticks upward → hits top wall
-    skipDeathAnim();
-
-    expect(last('end')?.won).toBe(false);
+    advance(1, { x: 0, y: -1 }); // queue: turn up → head goes to (10,9) → eats apple
+    expect(last('hud').score).toBe(1);
+    expect(last('end')).toBeNull();
   });
 });
 

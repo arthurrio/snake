@@ -64,6 +64,7 @@ self.onmessage = ({ data }) => {
         prevSnake = snake.map(s => ({ x: s.x, y: s.y }));
         lastTick += tickMs;
         tick();
+        postHud(); // keep head/apple positions current for every game step
       }
 
       updateParticles(dt);
@@ -115,11 +116,12 @@ function spawnApple() {
 function tick() {
   if (dirQueue.length) dir = dirQueue.shift();
 
-  const head = { x: snake[0].x + dir.x, y: snake[0].y + dir.y };
+  // Wrap around: crossing a wall teleports the snake to the opposite side
+  const head = {
+    x: ((snake[0].x + dir.x) + COLS) % COLS,
+    y: ((snake[0].y + dir.y) + ROWS) % ROWS,
+  };
 
-  if (head.x < 0 || head.x >= COLS || head.y < 0 || head.y >= ROWS) {
-    endGame(false); return;
-  }
   if (snake.some(s => s.x === head.x && s.y === head.y)) {
     endGame(false); return;
   }
@@ -354,5 +356,10 @@ function roundRect(x, y, w, h, r) {
 }
 
 function postHud() {
-  self.postMessage({ type: 'hud', score, best, length: snake.length, combo });
+  self.postMessage({
+    type: 'hud', score, best, length: snake.length, combo,
+    // Head and apple positions exposed so E2E tests can navigate toward the apple
+    headX: snake[0].x, headY: snake[0].y,
+    appleX: apple?.x ?? -1, appleY: apple?.y ?? -1,
+  });
 }
