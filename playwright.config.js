@@ -32,9 +32,12 @@ export default defineConfig({
       },
     },
     {
+      // WebKit requires system libraries unavailable in WSL2.
+      // Use Chromium with iPhone 13 device emulation instead.
       name: 'Mobile Safari (iPhone 13)',
       use: {
         ...devices['iPhone 13'],
+        browserName: 'chromium',
         ...(executablePath ? { executablePath } : {}),
       },
     },
