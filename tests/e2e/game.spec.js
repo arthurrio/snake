@@ -197,8 +197,12 @@ async function stepTowardApple(page, currentDir) {
 async function waitForHeadMove(page, px, py) {
   // Timeout is generous (10 s) because under full-suite load the rAF loop can
   // slow well below the nominal 50 ms/tick and we must not flake on CI.
+  // Also resolves immediately if the game ended (overlay visible), so we never
+  // hang waiting for a head that will never move again.
   await page.waitForFunction(
     ([ex, ey]) => {
+      const overlay = document.getElementById('overlay');
+      if (overlay.style.display !== 'none') return true; // game over
       const canvas = document.getElementById('canvas');
       const hx = parseInt(canvas.dataset.headX ?? '-1');
       const hy = parseInt(canvas.dataset.headY ?? '-1');
@@ -217,7 +221,6 @@ async function waitForHeadMove(page, px, py) {
  * apple landing in the snake's straight-line path by chance.
  */
 async function forceSelfCollision(page) {
-  const TICK = 55; // slightly above 50 ms/tick so we don't skip ticks
   let dir = 'ArrowRight'; // snake starts going right
 
   // Eat 4 apples so the snake reaches length 5
@@ -227,6 +230,7 @@ async function forceSelfCollision(page) {
     // After each key press we wait for the head to actually move (one tick),
     // avoiding fixed-timeout races that cause the snake to skip cells.
     while (parseInt(await page.locator('#score').textContent()) <= currentScore) {
+      if (await page.locator('#overlay').isVisible()) return; // game already over
       const { hx, hy } = await gamePositions(page);
       const pressed = await stepTowardApple(page, dir);
       if (pressed) dir = pressed;
@@ -235,15 +239,21 @@ async function forceSelfCollision(page) {
     currentScore = parseInt(await page.locator('#score').textContent());
   }
 
-  // Align the snake to go right and straighten the body:
-  // - ArrowDown is safe from any direction (from UP: reversal is blocked but harmless)
-  // - ArrowRight turns from down/up/right to right
+  // Align the snake to go right and straighten the body.
+  // Use waitForHeadMove for every step so no tick is skipped under load.
+  let pos = await gamePositions(page);
   await page.keyboard.press('ArrowDown');
-  await page.waitForTimeout(TICK);
-  await page.keyboard.press('ArrowRight');
+  await waitForHeadMove(page, pos.hx, pos.hy);
 
-  // Go right for 5 ticks — with length 5 this makes the entire body horizontal
-  for (let i = 0; i < 5; i++) await page.waitForTimeout(TICK);
+  pos = await gamePositions(page);
+  await page.keyboard.press('ArrowRight');
+  await waitForHeadMove(page, pos.hx, pos.hy);
+
+  // Move right for 5 more ticks to make the entire body horizontal
+  for (let i = 0; i < 5; i++) {
+    pos = await gamePositions(page);
+    await waitForHeadMove(page, pos.hx, pos.hy);
+  }
 
   // 4-step clockwise loop → guaranteed self-collision for a horizontal right-going snake of length ≥ 4:
   //   body before: [(hx,hy),(hx-1,hy),(hx-2,hy),(hx-3,hy),(hx-4,hy)]
@@ -252,7 +262,7 @@ async function forceSelfCollision(page) {
   //
   // We use waitForHeadMove instead of waitForTimeout so that exactly one tick
   // fires between each key press — preventing the snake from skipping a cell.
-  let pos = await gamePositions(page);
+  pos = await gamePositions(page);
   await page.keyboard.press('ArrowRight');
   await waitForHeadMove(page, pos.hx, pos.hy);
 
