@@ -92,7 +92,7 @@ function initGame() {
   snake         = [{ x: COLS >> 1, y: ROWS >> 1 }];
   prevSnake     = [{ x: COLS >> 1, y: ROWS >> 1 }];
   score         = 0;
-  combo         = 0;
+  combo         = 1;
   lastEatTs     = 0;
   dirQueue      = [];
   particles     = [];
